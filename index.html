@@ -1,0 +1,763 @@
+<!doctype html>
+<html lang="de-CH">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Pfadikasse Seewadel</title>
+<meta name="theme-color" content="#24543f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Pfadikasse">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<script src="xlsx.full.min.js"></script>
+<script src="jszip.min.js"></script>
+<style>
+:root{
+  --bg:#f2f4ef; --surface:#ffffff; --fg:#1b2420; --muted:#5e6b63; --line:#d9dfd6;
+  --accent:#24543f; --accent-fg:#ffffff; --accent-soft:#e1ebe3;
+  --pos:#1f6f8b; --neg:#a2402c; --warn-bg:#fbefd9; --warn-fg:#7a4b0c;
+  --font:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  --r:10px; color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#121815; --surface:#1a221e; --fg:#e6ece7; --muted:#97a59c; --line:#2c3832;
+  --accent:#7cc19b; --accent-fg:#0f1a14; --accent-soft:#213128;
+  --pos:#6cb8d4; --neg:#e48a74; --warn-bg:#3a2d16; --warn-fg:#f0c98a; color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.45;-webkit-text-size-adjust:100%}
+[hidden]{display:none!important}
+.wrap{max-width:640px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right));padding-top:calc(20px + env(safe-area-inset-top));padding-bottom:130px;display:flex;flex-direction:column;gap:20px}
+h1,h2{margin:0}
+h1{font-size:1.1rem;font-weight:600;color:var(--muted)}
+h2{font-size:1.05rem}
+.num{font-variant-numeric:tabular-nums}
+.saldo{display:flex;flex-direction:column;gap:4px}
+.saldo .big{font-size:2.5rem;font-weight:700;letter-spacing:-.02em;line-height:1.05}
+.label{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.stats>div{background:var(--surface);padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.stats .v{font-weight:600}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:5px 12px;font:inherit;font-size:.85rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.list{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.row{display:grid;grid-template-columns:52px 1fr auto;gap:12px;align-items:center;padding:12px;border:0;border-top:1px solid var(--line);background:none;color:inherit;font:inherit;text-align:left;cursor:pointer;width:100%}
+.row:first-child{border-top:0}
+.row:hover{background:var(--accent-soft)}
+.row .d{font-size:.8rem;color:var(--muted);line-height:1.2}
+.row .d b{display:block;font-size:1rem;color:var(--fg)}
+.row .t{min-width:0}
+.row .t .g{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .t .s{font-size:.8rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .a{font-weight:600;text-align:right}
+.row .a small{display:block;font-weight:400;font-size:.72rem;color:var(--muted)}
+.ein{color:var(--pos)} .aus{color:var(--neg)}
+.empty{padding:28px 16px;text-align:center;color:var(--muted)}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding-top:12px;padding-bottom:calc(12px + env(safe-area-inset-bottom));padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right));z-index:5}
+.bar .in{max-width:640px;margin:0 auto;display:grid;grid-template-columns:2fr 1fr;gap:10px}
+.btn{font:inherit;font-weight:600;border-radius:var(--r);padding:12px 14px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer;text-align:center;text-decoration:none;display:inline-block}
+.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.btn.danger{color:var(--neg)}
+.btn:disabled{opacity:.55;cursor:default}
+.btn:focus-visible,.chip:focus-visible,.row:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tools{display:flex;gap:10px;flex-wrap:wrap}
+.tools .btn{flex:1 1 180px}
+details{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+summary{cursor:pointer;font-weight:600}
+details ol,details ul{margin:10px 0 0;padding-left:20px}
+details li{margin-bottom:6px}
+details h3{font-size:.95rem;margin:14px 0 0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field.full{grid-column:1/-1}
+input,select{font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);width:100%;min-width:0;-webkit-appearance:none;appearance:none}
+input[type=date]{min-height:44px}
+.note{font-size:.85rem;color:var(--muted)}
+.banner{background:var(--warn-bg);color:var(--warn-fg);border-radius:8px;padding:10px 12px;font-size:.9rem}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.sheet-bg{position:fixed;inset:0;background:rgba(10,16,12,.45);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--surface);width:100%;max-width:640px;max-height:92%;overflow:auto;-webkit-overflow-scrolling:touch;border-radius:16px 16px 0 0;padding-top:18px;padding-bottom:calc(18px + env(safe-area-inset-bottom));padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right));display:flex;flex-direction:column;gap:14px}
+@media (min-width:700px){.sheet-bg{align-items:center}.sheet{border-radius:16px}}
+.seg{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{font:inherit;font-weight:600;padding:10px;border:0;background:var(--bg);color:var(--muted);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
+.photo{display:flex;gap:12px;align-items:center}
+.photo img{width:84px;height:84px;object-fit:cover;border-radius:8px;border:1px solid var(--line);background:var(--bg)}
+.photo .ph{width:84px;height:84px;border-radius:8px;border:1px dashed var(--line);display:grid;place-items:center;color:var(--muted);font-size:.75rem;text-align:center;flex:none}
+.photo .acts{display:flex;flex-direction:column;gap:8px;flex:1;min-width:0}
+.filebtn{position:relative;overflow:hidden}
+.filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0}
+.status{font-size:.85rem;color:var(--muted);min-height:1.2em}
+.status.ok{color:var(--accent)} .status.err{color:var(--neg)}
+.foot{display:flex;gap:10px;flex-wrap:wrap}
+.foot .btn{flex:1 1 120px}
+.confirm{display:flex;flex-direction:column;gap:8px;background:var(--warn-bg);color:var(--warn-fg);padding:10px 12px;border-radius:8px}
+.big-img{width:100%;border-radius:8px;border:1px solid var(--line)}
+@media (prefers-reduced-motion:no-preference){.sheet{animation:up .18s ease-out}@keyframes up{from{transform:translateY(24px);opacity:.6}}}
+</style>
+</head>
+<body>
+<style>
+.topf{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch}
+.topf .chip{white-space:nowrap;flex:none}
+.chip.add{border-style:dashed;color:var(--muted)}
+.info{font-size:.88rem;color:var(--muted)}
+.row .a small.offen{color:var(--warn-fg)}
+.inline{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.inline select{flex:0 1 120px}
+.inline .btn{flex:1 1 180px}
+.lagerlist{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.lagerlist .it{display:flex;gap:10px;align-items:center;justify-content:space-between}
+.lagerlist .it .btn{padding:8px 12px}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2712%27 height=%278%27%3E%3Cpath d=%27M1 1l5 5 5-5%27 fill=%27none%27 stroke=%27%235e6b63%27 stroke-width=%272%27/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:34px}
+</style>
+
+<div class="wrap">
+  <header class="saldo">
+    <h1 id="kontoName">Pfadikasse</h1>
+    <span class="label">Kontostand</span>
+    <div class="big num" id="saldo">CHF 0.00</div>
+  </header>
+
+  <div id="installBanner" class="banner" hidden></div>
+  <div id="banner" class="banner" hidden></div>
+
+  <div class="topf" id="topf" role="group" aria-label="Abrechnung wählen"></div>
+
+  <div class="box" id="lagerBox" hidden>
+    <h2 id="lagerBoxTitle">Neues Lager</h2>
+    <div class="grid2" style="margin-top:0">
+      <div class="field full"><label class="label" for="lName">Name</label><input id="lName" placeholder="z.B. Sommerlager 2027"></div>
+      <div class="field"><label class="label" for="lVon">von</label><input id="lVon" type="date"></div>
+      <div class="field"><label class="label" for="lBis">bis</label><input id="lBis" type="date"></div>
+    </div>
+    <div class="status" id="lagerStatus"></div>
+    <div class="foot"><button class="btn primary" id="btnLagerSave" type="button">Speichern</button><button class="btn" id="btnLagerCancel" type="button">Abbrechen</button></div>
+  </div>
+
+  <div class="chips" id="years" role="group" aria-label="Jahr wählen"></div>
+
+  <div class="stats">
+    <div><span class="label">Einnahmen</span><span class="v num ein" id="sEin">0.00</span></div>
+    <div><span class="label">Ausgaben</span><span class="v num aus" id="sAus">0.00</span></div>
+    <div><span class="label">Belege</span><span class="v num" id="sAnz">0</span></div>
+  </div>
+  <div class="info" id="topfInfo"></div>
+
+  <section style="display:flex;flex-direction:column;gap:10px">
+    <h2 id="listTitle">Buchungen</h2>
+    <div class="list" id="list"><div class="empty">Buchungen werden geladen</div></div>
+  </section>
+
+  <div id="toolsAllg" class="box">
+    <h2>Jahresabrechnung</h2>
+    <div class="inline">
+      <select id="selJahr" aria-label="Jahr für die Jahresabrechnung"></select>
+      <button class="btn primary" id="btnJahr" type="button">Excel herunterladen</button>
+    </div>
+    <span class="note">Eine Excel-Datei mit allen Buchungen des Jahres, inklusive Lager. Die Buchungen bleiben danach in der App.</span>
+  </div>
+
+  <div id="toolsLager" class="box" hidden>
+    <h2>Lagerabrechnung</h2>
+    <button class="btn primary" id="btnLagerExport" type="button">Excel herunterladen</button>
+    <span class="note">Eine Excel-Datei mit allen Buchungen dieses Lagers. Die Buchungen bleiben danach in der App.</span>
+    <div class="foot">
+      <button class="btn" id="btnLagerEdit" type="button">Lager bearbeiten</button>
+      <button class="btn" id="btnLagerClose" type="button">Lager abschliessen</button>
+    </div>
+  </div>
+
+  <div class="box" id="exportBox" hidden>
+    <span id="exportInfo"></span>
+    <div class="foot">
+      <button class="btn primary" id="btnShare" type="button" hidden>Speichern oder teilen</button>
+      <button class="btn" id="btnDownload" type="button">Herunterladen</button>
+    </div>
+  </div>
+  <div class="status" id="exportStatus"></div>
+
+  <details id="help">
+    <summary>Anleitung</summary>
+    <h3>Als App aufs Handy (wichtig)</h3>
+    <ul>
+      <li><b>iPhone:</b> Seite in Safari öffnen, unten auf Teilen tippen, dann „Zum Home-Bildschirm“. Nur so bleiben die Daten auf dem iPhone sicher gespeichert.</li>
+      <li><b>Android:</b> Seite in Chrome öffnen, oben rechts auf die drei Punkte, dann „App installieren“ oder „Zum Startbildschirm hinzufügen“.</li>
+    </ul>
+    <h3>Beleg erfassen</h3>
+    <ol>
+      <li>Oben wählen, wohin der Beleg gehört: „Allgemein“ oder ein Lager.</li>
+      <li>Unten auf „Beleg erfassen“ tippen und den Kassenzettel fotografieren.</li>
+      <li>Kaufgrund, Betrag und Datum eintragen, speichern.</li>
+    </ol>
+    <h3>Lager</h3>
+    <ul>
+      <li>Oben auf „+ Lager“ tippen und das Lager anlegen. Alle Lagerbelege dort erfassen.</li>
+      <li>Nach dem Lager „Excel herunterladen“ für die Lagerabrechnung.</li>
+    </ul>
+    <h3>Jahresabrechnung</h3>
+    <ul>
+      <li>Unter „Allgemein“ das Jahr wählen und „Excel herunterladen“. Die Datei enthält alle Buchungen des Jahres, auch die Lager.</li>
+      <li><b>iPhone:</b> Im Menü, das sich öffnet, „In Dateien sichern“ wählen. Danach findest du die Excel in der App „Dateien“.</li>
+      <li><b>Android:</b> Die Excel landet im Ordner „Downloads“.</li>
+    </ul>
+    <h3>Wo sind meine Daten?</h3>
+    <ul>
+      <li>Alle Buchungen und Fotos sind nur auf deinem Handy gespeichert, niemand sonst sieht sie. Sie bleiben in der App, bis du sie selbst löschst.</li>
+      <li>Gelöscht werden sie nur, wenn du die App vom Handy entfernst oder die Websitedaten im Browser löschst.</li>
+      <li>Handywechsel: Unter Einstellungen „Komplette Sicherung“ erstellen und auf dem neuen Handy unter „Datei einlesen“ wieder einlesen.</li>
+    </ul>
+  </details>
+
+  <details id="settingsBox">
+    <summary>Einstellungen</summary>
+    <div class="grid2">
+      <div class="field full"><label class="label" for="setPerson">Dein Name</label><input id="setPerson" placeholder="z.B. Gian Muster v/o Fuchs" autocomplete="name"></div>
+      <div class="field full"><label class="label" for="setName">Kontoname</label><input id="setName" placeholder="Pfadi Seewadel Kasse"></div>
+      <div class="field"><label class="label" for="setStart">Anfangssaldo CHF</label><input id="setStart" inputmode="decimal" placeholder="0.00"></div>
+      <div class="field"><label class="label" for="setDatum">per Datum</label><input id="setDatum" type="date"></div>
+      <div class="field full"><button class="btn" id="btnSaveSet" type="button">Einstellungen speichern</button><span class="status" id="setStatus"></span></div>
+
+      <div class="field full">
+        <span class="label">Abgeschlossene Lager</span>
+        <div class="lagerlist" id="lagerArchiv"></div>
+      </div>
+
+      <div class="field full">
+        <span class="label">Komplette Sicherung</span>
+        <span class="note">Alle Buchungen und Fotos in einer Datei, zum Beispiel für einen Handywechsel. Speichere sie an einem sicheren Ort.</span>
+        <button class="btn" id="btnBackup" type="button">Komplette Sicherung erstellen</button>
+        <span class="note" id="backupInfo"></span>
+      </div>
+      <div class="field full">
+        <span class="label">Datei einlesen</span>
+        <span class="note">Eine Sicherung (.zip) aus dieser App wieder einlesen. Vorhandene Buchungen bleiben erhalten, doppelte werden übersprungen.</span>
+        <label class="btn filebtn">Datei einlesen<input id="fImport" type="file" accept=".zip,application/zip"></label>
+        <span class="status" id="importStatus"></span>
+      </div>
+      <div class="field full">
+        <span class="label">Speicher</span>
+        <span class="note" id="storageInfo">Wird geprüft.</span>
+      </div>
+      <div class="field full">
+        <span class="label">Alles löschen</span>
+        <span class="note">Löscht alle Buchungen, Lager und Fotos auf diesem Handy. Lade vorher die Jahresabrechnung herunter.</span>
+        <button class="btn danger" id="btnWipe" type="button">Alle Daten löschen</button>
+        <div class="confirm" id="wipeBox" hidden>
+          <span id="wipeText">Wirklich alles löschen?</span>
+          <div class="foot"><button class="btn danger" id="btnWipeYes" type="button">Ja, alles löschen</button><button class="btn" id="btnWipeNo" type="button">Abbrechen</button></div>
+        </div>
+      </div>
+    </div>
+  </details>
+</div>
+
+<div class="bar"><div class="in">
+  <button class="btn primary" id="btnAus" type="button">Beleg erfassen</button>
+  <button class="btn" id="btnEin" type="button">Einnahme</button>
+</div></div>
+
+<div class="sheet-bg" id="sheetBg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <h2 id="sheetTitle">Beleg erfassen</h2>
+    <div class="seg" role="group" aria-label="Art">
+      <button type="button" id="segAus" aria-pressed="true">Ausgabe</button>
+      <button type="button" id="segEin" aria-pressed="false">Einnahme</button>
+    </div>
+    <div class="photo">
+      <div id="phBox"><div class="ph">Kein Foto</div></div>
+      <div class="acts">
+        <label class="btn primary filebtn">Foto aufnehmen<input id="fCam" type="file" accept="image/*" capture="environment"></label>
+        <label class="btn filebtn">Aus Galerie wählen<input id="fGal" type="file" accept="image/*"></label>
+      </div>
+    </div>
+    <div class="status" id="readStatus"></div>
+    <div class="grid2" style="margin-top:0">
+      <div class="field full"><label class="label" for="fTopf">Gehört zu</label><select id="fTopf"></select></div>
+      <div class="field full"><label class="label" for="fGrund">Kaufgrund</label><input id="fGrund" placeholder="z.B. Material Herbstlager"></div>
+      <div class="field"><label class="label" for="fBetrag">Betrag CHF</label><input id="fBetrag" class="num" inputmode="decimal" placeholder="0.00"></div>
+      <div class="field"><label class="label" for="fDatum">Datum</label><input id="fDatum" type="date"></div>
+      <div class="field"><label class="label" for="fKat">Kategorie</label><select id="fKat"></select></div>
+      <div class="field"><label class="label" for="fShop">Geschäft / von</label><input id="fShop" placeholder="z.B. Migros"></div>
+    </div>
+    <div id="bigImgBox" hidden><img class="big-img" id="bigImg" alt="Belegfoto"></div>
+    <div class="confirm" id="confirmBox" hidden>
+      <span id="confirmText">Diese Buchung samt Foto endgültig löschen?</span>
+      <div class="foot"><button class="btn danger" id="btnDelYes" type="button">Ja, löschen</button><button class="btn" id="btnDelNo" type="button">Behalten</button></div>
+    </div>
+    <div class="status" id="saveStatus"></div>
+    <div class="foot">
+      <button class="btn primary" id="btnSave" type="button">Speichern</button>
+      <button class="btn" id="btnCancel" type="button">Abbrechen</button>
+      <button class="btn danger" id="btnDel" type="button" hidden>Löschen</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const KAT_AUS=["Material","Lebensmittel","Transport","Lager","Aktivitäten","Administration","Ausbildung","Sonstiges"];
+const KAT_EIN=["Mitgliederbeitrag","Lagerbeitrag","Spende","Aktion / Verkauf","Beitrag Verband","Sonstiges"];
+const $=id=>document.getElementById(id);
+const fmt=n=>new Intl.NumberFormat("de-CH",{minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0);
+const fmtDate=s=>{if(!s)return"";const[y,m,d]=s.slice(0,10).split("-");return d+"."+m+"."+y};
+const today=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+const parseAmt=v=>{const n=parseFloat(String(v||"").replace(/[’'\s]/g,"").replace(",","."));return isFinite(n)?Math.round(n*100)/100:NaN};
+const newId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,10);
+const safeName=s=>String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^\w\- ]+/g,"").trim().replace(/\s+/g,"_");
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ---------- Speicher auf dem Geraet (IndexedDB) ---------- */
+const DB={
+  db:null,
+  open(){return new Promise((res,rej)=>{
+    const r=indexedDB.open("pfadikasse",1);
+    r.onupgradeneeded=()=>{const d=r.result;d.createObjectStore("buchungen",{keyPath:"id"});d.createObjectStore("fotos");d.createObjectStore("meta")};
+    r.onsuccess=()=>{this.db=r.result;res()};
+    r.onerror=()=>rej(r.error);
+  })},
+  tx(store,mode,fn){return new Promise((res,rej)=>{
+    const t=this.db.transaction(store,mode);const q=fn(t.objectStore(store));let out;
+    if(q)q.onsuccess=()=>{out=q.result};
+    t.oncomplete=()=>res(out);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error);
+  })},
+  all(s){return this.tx(s,"readonly",o=>o.getAll())},
+  get(s,k){return this.tx(s,"readonly",o=>o.get(k))},
+  put(s,v,k){return this.tx(s,"readwrite",o=>k===undefined?o.put(v):o.put(v,k))},
+  del(s,k){return this.tx(s,"readwrite",o=>o.delete(k))},
+  clear(s){return this.tx(s,"readwrite",o=>o.clear())}
+};
+async function saveFoto(id,blob){const buf=await blob.arrayBuffer();await DB.put("fotos",{type:blob.type||"image/jpeg",buf},id)}
+async function getFoto(id){const f=await DB.get("fotos",id);return f?new Blob([f.buf],{type:f.type}):null}
+
+let entries=[],lager=[],settings={name:"",person:"",start:0,startDatum:""},lastBackup=0;
+let topf="allgemein",year="alle",edit=null,pending=null,lagerEdit=null,urls=[];
+function trackUrl(u){urls.push(u);return u}
+function freeUrls(){urls.forEach(u=>URL.revokeObjectURL(u));urls=[]}
+const topfName=id=>id==="allgemein"?"Allgemein":((lager.find(l=>l.id===id)||{}).name||"Lager");
+const lagerOf=id=>lager.find(l=>l.id===id);
+
+async function reload(){
+  entries=(await DB.all("buchungen")).filter(e=>typeof e.betrag==="number");
+  entries.forEach(e=>{if(!e.abrechnung)e.abrechnung="allgemein"});
+  lager=(await DB.get("meta","lager"))||[];
+  settings=Object.assign({name:"",person:"",start:0,startDatum:""},(await DB.get("meta","einstellungen"))||{});
+  lastBackup=(await DB.get("meta","letzteSicherung"))||0;
+  if(topf!=="allgemein"&&!lagerOf(topf))topf="allgemein";
+  fillSettings();render();
+}
+
+/* ---------- Anzeige ---------- */
+function render(){
+  $("kontoName").textContent=settings.name||"Pfadikasse";
+  const total=entries.reduce((s,e)=>s+(e.typ==="ein"?e.betrag:-e.betrag),0)+(settings.start||0);
+  $("saldo").textContent="CHF "+fmt(total);
+  $("saldo").style.color=total<0?"var(--neg)":"";
+
+  // Abrechnungen: Allgemein und offene Lager
+  const tb=$("topf");tb.innerHTML="";
+  const sichtbar=lager.filter(l=>!l.abgeschlossen||l.id===topf);
+  [{id:"allgemein",name:"Allgemein"},...sichtbar].forEach(t=>{
+    const b=document.createElement("button");b.type="button";b.className="chip";
+    b.textContent=t.id==="allgemein"?"Allgemein":"⛺ "+t.name;
+    b.setAttribute("aria-pressed",String(t.id===topf));
+    b.onclick=()=>{topf=t.id;year="alle";closeExport();render()};tb.append(b);
+  });
+  const add=document.createElement("button");add.type="button";add.className="chip add";add.textContent="+ Lager";add.onclick=()=>openLagerBox(null);tb.append(add);
+
+  const inTopf=entries.filter(e=>e.abrechnung===topf);
+  const years=[...new Set(inTopf.map(e=>(e.datum||"").slice(0,4)).filter(Boolean))].sort().reverse();
+  if(year!=="alle"&&!years.includes(year))year="alle";
+  const yb=$("years");yb.innerHTML="";
+  ["alle",...years].forEach(y=>{const b=document.createElement("button");b.type="button";b.className="chip";b.textContent=y==="alle"?"Alle Jahre":y;b.setAttribute("aria-pressed",String(y===year));b.onclick=()=>{year=y;render()};yb.append(b)});
+  yb.hidden=years.length<2;
+
+  const list=inTopf.filter(e=>year==="alle"||(e.datum||"").startsWith(year))
+    .sort((a,b)=>(b.datum||"").localeCompare(a.datum||"")||(b.nr||0)-(a.nr||0));
+  let ein=0,aus=0;list.forEach(e=>e.typ==="ein"?ein+=e.betrag:aus+=e.betrag);
+  $("sEin").textContent=fmt(ein);$("sAus").textContent=fmt(aus);$("sAnz").textContent=list.length;
+  if(topf==="allgemein"){
+    $("listTitle").textContent="Buchungen";
+    $("topfInfo").textContent="";
+  }else{
+    const l=lagerOf(topf)||{};
+    $("listTitle").textContent="Buchungen "+(l.name||"Lager");
+    const zeit=l.von?(fmtDate(l.von)+(l.bis?" bis "+fmtDate(l.bis):"")):"";
+    $("topfInfo").textContent=[zeit,"Ergebnis Lager: CHF "+fmt(ein-aus),l.abgeschlossen?"abgeschlossen":""].filter(Boolean).join(" · ");
+  }
+
+  const L=$("list");L.innerHTML="";
+  if(!list.length){L.innerHTML=topf==="allgemein"
+    ?'<div class="empty">Noch keine Buchungen. Tippe unten auf „Beleg erfassen“, mach ein Foto vom Kassenzettel und gib den Kaufgrund ein.</div>'
+    :'<div class="empty">Noch keine Buchungen in diesem Lager. Belege, die du hier erfasst, gehören automatisch zum Lager.</div>'}
+  list.forEach(e=>{
+    const r=document.createElement("button");r.type="button";r.className="row";
+    const [y,m,d]=(e.datum||"--").split("-");
+    r.innerHTML=`<div class="d num"><b>${d||""}.${m||""}.</b>${y||""}</div>
+      <div class="t"><div class="g"></div><div class="s"></div></div>
+      <div class="a num ${e.typ}">${e.typ==="ein"?"+":"−"}${fmt(e.betrag)}<small></small></div>`;
+    r.querySelector(".g").textContent=e.grund||"(ohne Kaufgrund)";
+    r.querySelector(".s").textContent=["Nr. "+(e.nr||"?"),e.kategorie,e.geschaeft].filter(Boolean).join(" · ");
+    r.querySelector("small").textContent=e.bildId?"mit Foto":"ohne Foto";
+    r.onclick=()=>openSheet(e);
+    L.append(r);
+  });
+
+  // Werkzeuge
+  $("toolsAllg").hidden=topf!=="allgemein";$("toolsLager").hidden=topf==="allgemein";
+  const alleJahre=[...new Set(entries.map(e=>(e.datum||"").slice(0,4)).filter(Boolean))].sort().reverse();
+  const selJ=$("selJahr"),cur=selJ.value;
+  selJ.innerHTML=alleJahre.map(y=>`<option>${y}</option>`).join("");
+  if(alleJahre.includes(cur))selJ.value=cur;
+  $("btnJahr").disabled=!alleJahre.length;
+  if(topf!=="allgemein"){const l=lagerOf(topf)||{};$("btnLagerExport").disabled=!inTopf.length;$("btnLagerClose").textContent=l.abgeschlossen?"Lager wieder öffnen":"Lager abschliessen"}
+  $("help").open=!entries.length&&!lager.length;
+
+
+  // Abgeschlossene Lager in den Einstellungen
+  const ar=$("lagerArchiv");ar.innerHTML="";
+  const zu=lager.filter(l=>l.abgeschlossen);
+  if(!zu.length)ar.innerHTML='<span class="note">Keine.</span>';
+  zu.forEach(l=>{const it=document.createElement("div");it.className="it";
+    it.innerHTML=`<span>${esc(l.name)}</span>`;const b=document.createElement("button");b.className="btn";b.type="button";b.textContent="Anzeigen";
+    b.onclick=()=>{topf=l.id;year="alle";render();window.scrollTo({top:0,behavior:"smooth"})};it.append(b);ar.append(it)});
+  $("backupInfo").textContent=lastBackup?"Letzte komplette Sicherung: "+fmtDate(new Date(lastBackup).toISOString()):"Noch keine komplette Sicherung erstellt.";
+}
+
+/* ---------- Lager anlegen / bearbeiten ---------- */
+function openLagerBox(l){
+  lagerEdit=l?l.id:null;
+  $("lagerBoxTitle").textContent=l?"Lager bearbeiten":"Neues Lager";
+  $("lName").value=l?l.name:"";$("lVon").value=l?l.von||"":"";$("lBis").value=l?l.bis||"":"";
+  $("lagerStatus").textContent="";$("lagerBox").hidden=false;$("lName").focus();
+}
+$("btnLagerCancel").onclick=()=>{$("lagerBox").hidden=true};
+$("btnLagerSave").onclick=async()=>{
+  const name=$("lName").value.trim();const st=$("lagerStatus");st.className="status err";
+  if(!name){st.textContent="Bitte einen Namen eingeben.";return}
+  if(lager.some(l=>l.name.toLowerCase()===name.toLowerCase()&&l.id!==lagerEdit)){st.textContent="Ein Lager mit diesem Namen gibt es schon.";return}
+  const neu=lager.map(l=>l.id===lagerEdit?Object.assign({},l,{name,von:$("lVon").value,bis:$("lBis").value}):l);
+  if(!lagerEdit){const id="lager_"+newId();neu.push({id,name,von:$("lVon").value,bis:$("lBis").value,abgeschlossen:false,erstellt:new Date().toISOString()});topf=id}
+  await DB.put("meta",neu,"lager");$("lagerBox").hidden=true;closeExport();await reload();
+};
+$("btnLagerEdit").onclick=()=>{const l=lagerOf(topf);if(l)openLagerBox(l)};
+$("btnLagerClose").onclick=async()=>{
+  const l=lagerOf(topf);if(!l)return;
+  await DB.put("meta",lager.map(x=>x.id===l.id?Object.assign({},x,{abgeschlossen:!x.abgeschlossen}):x),"lager");
+  if(!l.abgeschlossen)topf="allgemein";
+  closeExport();await reload();
+};
+
+/* ---------- Erfassen-Blatt ---------- */
+function setTyp(t){
+  edit.typ=t;
+  $("segAus").setAttribute("aria-pressed",String(t==="aus"));
+  $("segEin").setAttribute("aria-pressed",String(t==="ein"));
+  const cur=$("fKat").value;const ks=t==="ein"?KAT_EIN:KAT_AUS;
+  $("fKat").innerHTML=ks.map(k=>`<option>${k}</option>`).join("");
+  if(ks.includes(cur))$("fKat").value=cur;
+  else if(t==="aus"&&$("fTopf").value!=="allgemein")$("fKat").value="Lager";
+}
+function showThumb(src){$("phBox").innerHTML="";if(src){const i=new Image();i.src=src;i.alt="Belegfoto";$("phBox").append(i)}else{$("phBox").innerHTML='<div class="ph">Kein Foto</div>'}}
+async function openSheet(e,typ){
+  freeUrls();
+  edit={id:e?e.id:null,typ:e?e.typ:(typ||"aus"),blob:null,bildId:e?e.bildId||null:null};
+  const ziel=e?e.abrechnung:topf;
+  const opts=[{id:"allgemein",name:"Allgemein"},...lager.filter(l=>!l.abgeschlossen||l.id===ziel)];
+  $("fTopf").innerHTML=opts.map(o=>`<option value="${esc(o.id)}">${o.id==="allgemein"?"Allgemein":"Lager: "+esc(o.name)}</option>`).join("");
+  $("fTopf").value=ziel;
+  $("sheetTitle").textContent=e?"Buchung Nr. "+(e.nr||""):(edit.typ==="ein"?"Einnahme erfassen":"Beleg erfassen");
+  $("fKat").innerHTML="";setTyp(edit.typ);
+  $("fGrund").value=e?e.grund||"":"";
+  $("fBetrag").value=e?e.betrag.toFixed(2):"";
+  $("fDatum").value=e?e.datum||"":today();
+  $("fShop").value=e?e.geschaeft||"":"";
+  if(e&&e.kategorie)$("fKat").value=e.kategorie;
+  showThumb(null);$("bigImgBox").hidden=true;
+  $("btnDel").hidden=!e;$("confirmBox").hidden=true;
+  $("readStatus").textContent="";$("readStatus").className="status";
+  $("saveStatus").textContent="";$("saveStatus").className="status";
+  $("btnSave").disabled=false;
+  $("sheetBg").hidden=false;
+  if(e&&e.bildId){
+    const b=await getFoto(e.bildId).catch(()=>null);
+    if(b&&edit&&edit.id===e.id){const u=trackUrl(URL.createObjectURL(b));showThumb(u);$("bigImg").src=u;$("bigImgBox").hidden=false}
+  }
+}
+function closeSheet(){$("sheetBg").hidden=true;edit=null;$("fCam").value="";$("fGal").value="";freeUrls()}
+$("segAus").onclick=()=>setTyp("aus");$("segEin").onclick=()=>setTyp("ein");
+$("btnAus").onclick=()=>openSheet(null,"aus");$("btnEin").onclick=()=>openSheet(null,"ein");
+$("btnCancel").onclick=closeSheet;
+$("sheetBg").addEventListener("click",ev=>{if(ev.target===$("sheetBg"))closeSheet()});
+document.addEventListener("keydown",ev=>{if(ev.key==="Escape"&&!$("sheetBg").hidden)closeSheet()});
+
+/* ---------- Foto ---------- */
+function loadImg(file){return new Promise((res,rej)=>{const u=URL.createObjectURL(file);const i=new Image();i.onload=()=>{URL.revokeObjectURL(u);res(i)};i.onerror=()=>{URL.revokeObjectURL(u);rej(new Error("Bild nicht lesbar"))};i.src=u})}
+async function shrink(file){
+  const img=await loadImg(file);const max=1600;
+  const s=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
+  const c=document.createElement("canvas");c.width=Math.round(img.naturalWidth*s);c.height=Math.round(img.naturalHeight*s);
+  c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+  const b=await new Promise(r=>c.toBlob(b=>r(b),"image/jpeg",0.8));
+  if(!b)throw new Error("Bild nicht lesbar");
+  return b;
+}
+async function onPhoto(ev){
+  const f=ev.target.files&&ev.target.files[0];if(!f||!edit)return;
+  const st=$("readStatus");st.className="status";
+  try{edit.blob=await shrink(f)}catch(e){st.textContent="Das Foto konnte nicht geöffnet werden. Versuch es als JPG oder PNG.";st.className="status err";return}
+  showThumb(trackUrl(URL.createObjectURL(edit.blob)));$("bigImgBox").hidden=true;
+  st.textContent="Foto angehängt.";st.className="status ok";
+  if(!$("fGrund").value)$("fGrund").focus();
+}
+$("fCam").addEventListener("change",onPhoto);$("fGal").addEventListener("change",onPhoto);
+
+/* ---------- Speichern / Loeschen ---------- */
+$("btnSave").onclick=async()=>{
+  if(!edit)return;
+  const st=$("saveStatus");st.className="status err";
+  const betrag=parseAmt($("fBetrag").value);
+  if(!(betrag>0)){st.textContent="Bitte einen Betrag grösser als 0 eingeben.";$("fBetrag").focus();return}
+  if(!$("fDatum").value){st.textContent="Bitte ein Datum wählen.";return}
+  if(!$("fGrund").value.trim()){st.textContent="Bitte einen Kaufgrund eingeben.";$("fGrund").focus();return}
+  $("btnSave").disabled=true;st.className="status";st.textContent="Wird gespeichert.";
+  try{
+    const old=edit.id?entries.find(x=>x.id===edit.id):null;
+    const id=edit.id||newId();
+    let bildId=edit.bildId;
+    if(edit.blob){
+      const neu=newId();await saveFoto(neu,edit.blob);
+      if(bildId)await DB.del("fotos",bildId).catch(()=>{});
+      bildId=neu;
+    }
+    const nr=old&&old.nr?old.nr:(entries.reduce((m,x)=>Math.max(m,x.nr||0),0)+1);
+    const data={id,nr,typ:edit.typ,betrag,datum:$("fDatum").value,grund:$("fGrund").value.trim(),
+      kategorie:$("fKat").value,geschaeft:$("fShop").value.trim(),abrechnung:$("fTopf").value||"allgemein",bildId:bildId||null,
+      erstellt:old&&old.erstellt?old.erstellt:new Date().toISOString(),geaendert:new Date().toISOString()};
+    await DB.put("buchungen",data);
+    if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().then(showStorage).catch(()=>{});
+    closeSheet();closeExport();
+    await reload();
+  }catch(e){
+    st.className="status err";
+    st.textContent=e&&e.name==="QuotaExceededError"?"Der Speicher auf dem Handy ist voll. Mach Platz und versuch es nochmals.":"Speichern hat nicht geklappt. Versuch es nochmals.";
+    $("btnSave").disabled=false;
+  }
+};
+$("btnDel").onclick=()=>{$("confirmBox").hidden=false};
+$("btnDelNo").onclick=()=>{$("confirmBox").hidden=true};
+$("btnDelYes").onclick=async()=>{
+  if(!edit||!edit.id)return;
+  $("btnDelYes").disabled=true;
+  try{await DB.del("buchungen",edit.id);if(edit.bildId)await DB.del("fotos",edit.bildId).catch(()=>{});closeSheet();closeExport();await reload()}
+  catch(e){$("saveStatus").textContent="Löschen hat nicht geklappt.";$("saveStatus").className="status err"}
+  $("btnDelYes").disabled=false;
+};
+
+/* ---------- Einstellungen ---------- */
+function fillSettings(){$("setPerson").value=settings.person||"";$("setName").value=settings.name||"";$("setStart").value=settings.start?String(settings.start):"";$("setDatum").value=settings.startDatum||""}
+$("btnSaveSet").onclick=async()=>{
+  const st=$("setStatus");
+  const start=$("setStart").value.trim()?parseAmt($("setStart").value):0;
+  if(isNaN(start)){st.textContent="Anfangssaldo ist keine Zahl.";st.className="status err";return}
+  try{await DB.put("meta",{person:$("setPerson").value.trim(),name:$("setName").value.trim(),start,startDatum:$("setDatum").value||""},"einstellungen");st.textContent="Gespeichert.";st.className="status ok";await reload()}
+  catch(e){st.textContent="Speichern hat nicht geklappt.";st.className="status err"}
+};
+$("btnWipe").onclick=()=>{
+  $("wipeText").textContent=`Wirklich alle ${entries.length} Buchungen, Lager und Fotos löschen? Das kann nicht rückgängig gemacht werden.`;
+  $("wipeBox").hidden=false;
+};
+$("btnWipeNo").onclick=()=>{$("wipeBox").hidden=true};
+$("btnWipeYes").onclick=async()=>{
+  await DB.clear("buchungen");await DB.clear("fotos");await DB.del("meta","lager");await DB.del("meta","letzteSicherung");
+  $("wipeBox").hidden=true;topf="allgemein";closeExport();await reload();
+};
+
+/* ---------- Excel ---------- */
+function fotoName(e){return e.bildId?`Belege/${String(e.nr||0).padStart(3,"0")}_${e.datum||""}_${safeName(e.grund).slice(0,40)||"Beleg"}.jpg`:""}
+function buildExcel(rows,{start=0,startLabel="Start",startDatum=""}={}){
+  const toDate=s=>{const[y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d)};
+  const head=["Beleg-Nr.","Datum","Art","Kategorie","Kaufgrund","Geschäft / von","Einnahme CHF","Ausgabe CHF","Saldo CHF","Foto-Datei","Abrechnung","Erfasst von"];
+  const aoa=[head,["",startDatum?toDate(startDatum):"",startLabel,"","","","","",start,"","",""]];
+  rows.forEach((e,i)=>{const r=i+3;aoa.push([e.nr||"",e.datum?toDate(e.datum):"",e.typ==="ein"?"Einnahme":"Ausgabe",e.kategorie||"",e.grund||"",e.geschaeft||"",
+    e.typ==="ein"?e.betrag:"",e.typ==="aus"?e.betrag:"",{t:"n",f:`I${r-1}+N(G${r})-N(H${r})`},fotoName(e).replace("Belege/","")||"kein Foto",topfName(e.abrechnung),settings.person||""])});
+  const last=rows.length+2;
+  aoa.push([],["","","Total","","","",{t:"n",f:`SUM(G3:G${last})`},{t:"n",f:`SUM(H3:H${last})`},{t:"n",f:`I${last}`},"","",""]);
+  const ws=XLSX.utils.aoa_to_sheet(aoa,{cellDates:true});
+  const range=XLSX.utils.decode_range(ws["!ref"]);
+  for(let R=1;R<=range.e.r;R++){
+    const c=ws[XLSX.utils.encode_cell({r:R,c:1})];if(c&&c.t==="d")c.z="dd.mm.yyyy";
+    for(const C of [6,7,8]){const x=ws[XLSX.utils.encode_cell({r:R,c:C})];if(x&&(x.t==="n"||x.f))x.z="#,##0.00"}
+  }
+  ws["!cols"]=[{wch:9},{wch:11},{wch:12},{wch:18},{wch:34},{wch:22},{wch:13},{wch:13},{wch:13},{wch:40},{wch:20},{wch:20}];
+  ws["!autofilter"]={ref:`A1:L${last}`};
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Buchungen");
+  // Uebersicht pro Kategorie
+  const kats=[...new Set([...KAT_AUS,...KAT_EIN,...rows.map(e=>e.kategorie).filter(Boolean)])];
+  const ov=[["Kategorie","Art","Total CHF"]];
+  const used=kats.flatMap(k=>["ein","aus"].filter(t=>rows.some(e=>e.kategorie===k&&e.typ===t)).map(t=>[k,t]));
+  used.forEach(([k,t],i)=>{const r=i+2;const col=t==="ein"?"G":"H";
+    ov.push([k,t==="ein"?"Einnahme":"Ausgabe",{t:"n",f:`SUMIFS(Buchungen!$${col}$3:$${col}$${last},Buchungen!$D$3:$D$${last},$A${r})`}])});
+  // Uebersicht pro Abrechnung (Allgemein, Lager)
+  const toepfe=[...new Set(rows.map(e=>topfName(e.abrechnung)))];
+  if(toepfe.length>1){
+    ov.push([],["Abrechnung","Einnahmen CHF","Ausgaben CHF","Ergebnis CHF"]);
+    toepfe.forEach(t=>{const r=ov.length+1;ov.push([t,{t:"n",f:`SUMIFS(Buchungen!$G$3:$G$${last},Buchungen!$K$3:$K$${last},$A${r})`},{t:"n",f:`SUMIFS(Buchungen!$H$3:$H$${last},Buchungen!$K$3:$K$${last},$A${r})`},{t:"n",f:`B${r}-C${r}`}])});
+  }
+  const wo=XLSX.utils.aoa_to_sheet(ov);
+  const r2=XLSX.utils.decode_range(wo["!ref"]);
+  for(let R=1;R<=r2.e.r;R++)for(let C=1;C<=3;C++){const x=wo[XLSX.utils.encode_cell({r:R,c:C})];if(x&&(x.t==="n"||x.f))x.z="#,##0.00"}
+  wo["!cols"]=[{wch:24},{wch:14},{wch:14},{wch:14}];
+  XLSX.utils.book_append_sheet(wb,wo,"Übersicht");
+  return XLSX.write(wb,{type:"array",bookType:"xlsx"});
+}
+const sortRows=a=>[...a].sort((x,y)=>(x.datum||"").localeCompare(y.datum||"")||(x.nr||0)-(y.nr||0));
+const baseName=what=>["Pfadikasse",what,safeName(settings.person)].filter(Boolean).join("_")+"_"+today();
+
+/* ---------- Export ---------- */
+async function makeZip(rows,base,excelOpts,mitExcel=true){
+  const zip=new JSZip();
+  if(mitExcel)zip.file(base+".xlsx",buildExcel(rows,excelOpts));
+  let fotos=0;
+  for(const e of rows){if(!e.bildId)continue;const b=await getFoto(e.bildId).catch(()=>null);if(b){zip.file(fotoName(e),b);fotos++}}
+  zip.file("sicherung/daten.json",JSON.stringify({app:"pfadikasse",version:2,exportiert:new Date().toISOString(),einstellungen:settings,lager,
+    buchungen:rows.map(e=>Object.assign({},e,{fotoDatei:fotoName(e)}))}));
+  const blob=await zip.generateAsync({type:"blob",mimeType:"application/zip"});
+  return {file:new File([blob],base+".zip",{type:"application/zip"}),fotos};
+}
+function closeExport(){pending=null;$("exportBox").hidden=true;$("exportStatus").textContent="";$("exportStatus").className="status"}
+function showExport(file,info,onDone){
+  pending={file,onDone};
+  const canShare=!!(navigator.canShare&&navigator.canShare({files:[file]}));
+  $("btnShare").hidden=!canShare;
+  $("exportInfo").textContent=info;$("exportBox").hidden=false;$("exportStatus").textContent="";
+  $("exportBox").scrollIntoView({behavior:"smooth",block:"center"});
+}
+async function runExport(btn,fn){
+  const st=$("exportStatus");closeExport();
+  if(!window.XLSX||!window.JSZip){st.textContent="Die App ist nicht vollständig geladen. Bitte einmal mit Internet neu öffnen.";st.className="status err";return}
+  const txt=btn.textContent;btn.disabled=true;btn.textContent="Wird erstellt …";
+  try{await fn()}catch(e){st.textContent="Die Datei konnte nicht erstellt werden.";st.className="status err"}
+  btn.textContent=txt;render();
+}
+const mz=(n,a,b)=>n+" "+(n===1?a:b);
+const XLSX_TYPE="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+// Datei auf dem Handy speichern: iPhone ueber das Teilen-Menue ("In Dateien sichern"), sonst normaler Download
+async function saveFile(file){
+  const st=$("exportStatus");
+  if(isIOS&&navigator.canShare&&navigator.canShare({files:[file]})){
+    try{await navigator.share({files:[file]});st.textContent="Gespeichert: "+file.name;st.className="status ok";return}
+    catch(e){if(e&&e.name==="AbortError"){st.textContent="Abgebrochen.";st.className="status";return}}
+  }
+  const u=URL.createObjectURL(file);const a=document.createElement("a");a.href=u;a.download=file.name;document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(u),60000);
+  st.textContent="Heruntergeladen: "+file.name;st.className="status ok";
+}
+function excelNow(rows,what,opts){
+  const st=$("exportStatus");closeExport();
+  if(!window.XLSX){st.textContent="Die App ist nicht vollständig geladen. Bitte einmal mit Internet neu öffnen.";st.className="status err";return}
+  try{const xlsx=buildExcel(rows,opts);saveFile(new File([xlsx],baseName(what)+".xlsx",{type:XLSX_TYPE}))}
+  catch(e){st.textContent="Die Excel-Datei konnte nicht erstellt werden.";st.className="status err"}
+}
+$("btnLagerExport").onclick=()=>{
+  const l=lagerOf(topf);if(!l)return;
+  excelNow(sortRows(entries.filter(e=>e.abrechnung===l.id)),"Lager_"+safeName(l.name),{startLabel:"Start"});
+};
+$("btnJahr").onclick=()=>{
+  const y=$("selJahr").value;if(!y)return;
+  const rows=sortRows(entries.filter(e=>(e.datum||"").startsWith(y)));
+  // Saldo aus den Vorjahren wird als Uebertrag uebernommen
+  const vorher=entries.filter(e=>(e.datum||"")<y).reduce((s,e)=>s+(e.typ==="ein"?e.betrag:-e.betrag),0);
+  const start=Math.round(((settings.start||0)+vorher)*100)/100;
+  excelNow(rows,"Jahresabrechnung_"+y,{start,startLabel:vorher?"Übertrag Vorjahr":"Anfangssaldo",startDatum:vorher?y+"-01-01":(settings.startDatum||"")});
+};
+$("btnBackup").onclick=()=>runExport($("btnBackup"),async()=>{
+  const rows=sortRows(entries);
+  const {file,fotos}=await makeZip(rows,baseName("Sicherung"),{},false);
+  showExport(file,`Komplette Sicherung bereit: ${mz(rows.length,"Buchung","Buchungen")}, ${mz(fotos,"Foto","Fotos")}. Speichere sie an einem sicheren Ort, zum Beispiel in iCloud, Google Drive oder per Mail an dich selbst.`,
+    async()=>{lastBackup=Date.now();await DB.put("meta",lastBackup,"letzteSicherung");render()});
+});
+$("btnShare").onclick=async()=>{
+  if(!pending)return;const st=$("exportStatus");const p=pending;
+  try{await navigator.share({files:[p.file],title:p.file.name});
+    if(p.onDone){const f=p.onDone;p.onDone=null;await f()}
+    st.textContent="Erledigt.";st.className="status ok";$("exportBox").hidden=true}
+  catch(e){if(e&&e.name==="AbortError"){st.textContent="Teilen abgebrochen.";st.className="status"}else{st.textContent="Teilen hat nicht geklappt. Nimm „Herunterladen“ und schick die Datei danach selbst.";st.className="status err"}}
+};
+$("btnDownload").onclick=async()=>{
+  if(!pending)return;const p=pending;
+  const u=URL.createObjectURL(p.file);const a=document.createElement("a");a.href=u;a.download=p.file.name;document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(u),60000);
+  if(p.onDone){const f=p.onDone;p.onDone=null;await f()}
+  $("exportStatus").textContent="Heruntergeladen: "+p.file.name;$("exportStatus").className="status ok";
+};
+
+/* ---------- Import ---------- */
+$("fImport").addEventListener("change",async ev=>{
+  const f=ev.target.files&&ev.target.files[0];ev.target.value="";if(!f)return;
+  const st=$("importStatus");st.className="status";st.textContent="Datei wird eingelesen.";
+  try{
+    const zip=await JSZip.loadAsync(f);
+    const j=zip.file("sicherung/daten.json");
+    if(!j)throw new Error("format");
+    const data=JSON.parse(await j.async("string"));
+    if(data.app!=="pfadikasse"||!Array.isArray(data.buchungen))throw new Error("format");
+    // Lager zusammenfuehren
+    const lg=[...lager];
+    (data.lager||[]).forEach(l=>{if(l&&l.id&&!lg.some(x=>x.id===l.id))lg.push(l)});
+    await DB.put("meta",lg,"lager");lager=lg;
+    const have=new Map(entries.map(e=>[e.id,e]));let n=0,maxNr=entries.reduce((m,x)=>Math.max(m,x.nr||0),0);
+    const nrs=new Set(entries.map(e=>e.nr));
+    for(const e of data.buchungen){
+      if(!e||!e.id||typeof e.betrag!=="number")continue;
+      const ex=have.get(e.id);
+      if(ex)continue;
+      let bildId=null;
+      if(e.fotoDatei&&zip.file(e.fotoDatei)){const b=await zip.file(e.fotoDatei).async("blob");bildId=newId();await saveFoto(bildId,new Blob([b],{type:"image/jpeg"}))}
+      const c={id:e.id,nr:e.nr,typ:e.typ==="ein"?"ein":"aus",betrag:e.betrag,datum:e.datum||"",grund:e.grund||"",kategorie:e.kategorie||"",geschaeft:e.geschaeft||"",
+        abrechnung:e.abrechnung&&(e.abrechnung==="allgemein"||lg.some(l=>l.id===e.abrechnung))?e.abrechnung:"allgemein",
+        bildId,erstellt:e.erstellt||"",geaendert:e.geaendert||new Date().toISOString()};
+      if(!c.nr||nrs.has(c.nr))c.nr=++maxNr;else maxNr=Math.max(maxNr,c.nr);
+      nrs.add(c.nr);
+      await DB.put("buchungen",c);n++;
+    }
+    if(!settings.person&&!settings.name&&data.einstellungen)await DB.put("meta",Object.assign({},data.einstellungen),"einstellungen");
+    await reload();
+    st.textContent=n?`${mz(n,"Buchung","Buchungen")} eingelesen.`:"Keine neuen Buchungen gefunden, alles war schon da.";st.className="status ok";
+  }catch(e){st.textContent=e&&e.message==="format"?"Das ist keine Datei aus dieser App.":"Die Datei konnte nicht eingelesen werden.";st.className="status err"}
+});
+
+/* ---------- Speicher und Installation ---------- */
+const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+const isAndroid=/Android/i.test(navigator.userAgent);
+const standalone=window.matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
+function showInstall(){
+  const b=$("installBanner");
+  if(standalone||(!isIOS&&!isAndroid)){b.hidden=true;return}
+  b.textContent=isIOS
+    ?"Wichtig: Installiere die App, damit deine Buchungen sicher gespeichert bleiben. In Safari unten auf Teilen tippen, dann „Zum Home-Bildschirm“. Danach die App nur noch über das neue Symbol öffnen."
+    :"Tipp: Installiere die App, damit deine Buchungen sicher gespeichert bleiben. In Chrome oben rechts auf die drei Punkte, dann „App installieren“.";
+  b.hidden=false;
+}
+async function showStorage(){
+  const el=$("storageInfo");let txt=[];
+  try{if(navigator.storage&&navigator.storage.persisted){const p=await navigator.storage.persisted();txt.push(p?"Dauerhafter Speicher ist aktiv.":(standalone?"Die App ist installiert.":"Dauerhafter Speicher ist nicht bestätigt. Installiere die App aufs Handy."))}}catch(e){}
+  try{if(navigator.storage&&navigator.storage.estimate){const q=await navigator.storage.estimate();if(q.usage!=null)txt.push(`Belegt: ${(q.usage/1048576).toFixed(1)} MB.`)}}catch(e){}
+  el.textContent=txt.join(" ")||"Keine Angaben verfügbar.";
+}
+
+/* ---------- Start ---------- */
+(async()=>{
+  showInstall();
+  try{await DB.open();await reload()}
+  catch(e){$("list").innerHTML='<div class="empty">Der Speicher auf diesem Gerät ist nicht verfügbar. Im privaten Modus funktioniert die App nicht. Öffne sie in einem normalen Browserfenster.</div>';$("btnAus").disabled=$("btnEin").disabled=true}
+  if(navigator.storage&&navigator.storage.persist&&entries.length)navigator.storage.persist().catch(()=>{});
+  showStorage();
+  if("serviceWorker" in navigator&&location.protocol==="https:")navigator.serviceWorker.register("sw.js").catch(()=>{});
+})();
+</script>
+</body>
+</html>
